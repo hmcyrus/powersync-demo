@@ -1,10 +1,11 @@
 import { db } from './db.js';
-import { Connector } from './connector.js';
+import { Connector, setOnline, getOnline } from './connector.js';
 
 const listEl = document.getElementById('list');
 const statusEl = document.getElementById('status');
 const titleInput = document.getElementById('title');
 const addBtn = document.getElementById('add');
+const networkBtn = document.getElementById('network');
 
 function rowsFromResult(result) {
   if (result.rows._array) return result.rows._array;
@@ -41,6 +42,10 @@ function renderTodos(rows) {
   }
 }
 
+function updateNetworkLabel() {
+  networkBtn.textContent = getOnline() ? 'Online' : 'Offline';
+}
+
 db.watch(
   'SELECT id, title, is_completed, created_at FROM todos ORDER BY created_at',
   [],
@@ -53,7 +58,10 @@ db.watch(
 
 db.registerListener({
   statusChanged: (status) => {
-    statusEl.textContent = `connected: ${status.connected}`;
+    const uploadError = status.dataFlowStatus?.uploadError;
+    statusEl.textContent = uploadError
+      ? `connected: ${status.connected}; upload: ${uploadError.message}`
+      : `connected: ${status.connected}`;
   },
 });
 
@@ -71,5 +79,12 @@ titleInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') addBtn.click();
 });
 
+networkBtn.addEventListener('click', () => {
+  setOnline(!getOnline());
+  updateNetworkLabel();
+});
+
+updateNetworkLabel();
+
 await db.init();
-await db.connect(new Connector());
+await db.connect(new Connector(), { retryDelayMs: 1000 });
