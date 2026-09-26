@@ -51,7 +51,9 @@ jobs:
 
       - name: Start backend
         working-directory: backend
-        run: uvicorn main:app --host 127.0.0.1 --port 8000 &
+        run: |
+          nohup uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 </dev/null &
+          echo $! > ../backend.pid
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -66,12 +68,14 @@ jobs:
 
       - name: Start frontend
         working-directory: frontend
-        run: npm run dev -- --host 0.0.0.0 &
+        run: |
+          nohup npm run dev -- --host 0.0.0.0 > ../frontend.log 2>&1 </dev/null &
+          echo $! > ../frontend.pid
 
       - name: Wait for app services
         run: |
           npm install --no-save wait-on
-          npx wait-on -t 120000 http://localhost:5173 http://127.0.0.1:8000/todos
+          npx wait-on -t 120000 http://localhost:5173 http://localhost:8000/todos
 
       - name: Install Playwright
         working-directory: e2e
@@ -83,13 +87,25 @@ jobs:
         working-directory: e2e
         run: npm test
 
-      - name: Capture Docker logs on failure
+      - name: Capture debug logs on failure
         if: failure()
-        run: docker compose logs > docker-logs.txt 2>&1
+        run: |
+          docker compose logs > docker-logs.txt 2>&1
+          cp -f backend.log backend-failure.log 2>/dev/null || true
+          cp -f frontend.log frontend-failure.log 2>/dev/null || true
 
       - name: Upload debug artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: pass-checks-debug-${{ github.run_id }}
-          path: docker-logs.txt
+          path: |
+            docker-logs.txt
+            backend-failure.log
+            frontend-failure.log
+
+      - name: Stop app services
+        if: always()
+        run: |
+          if [ -f backend.pid ]; then kill "$(cat backend.pid)" 2>/dev/null || true; fi
+          if [ -f frontend.pid ]; then kill "$(cat frontend.pid)" 2>/dev/null || true; fi
