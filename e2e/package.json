@@ -1,0 +1,11 @@
+{
+  "name": "powersync-todos-pass-checks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node pass-checks.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

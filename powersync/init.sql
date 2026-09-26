@@ -4,3 +4,5 @@ CREATE TABLE IF NOT EXISTS todos (
   is_completed integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL
 );
+
+CREATE PUBLICATION powersync FOR ALL TABLES;
