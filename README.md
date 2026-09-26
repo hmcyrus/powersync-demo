@@ -1,3 +1,5 @@
+## Check [Executive Summary](EXECUTIVE-SUMMARY.md) to get a clear mental model of what this demo is trying to achieve
+
 # PowerSync Todos POC — Slice 1 & 2
 
 Slice 1: server-to-device sync. Slice 2: device-to-server upload queue via FastAPI.

@@ -28,6 +28,46 @@ screen  →  local SQLite  →  upload queue  →  application API  →  Postgre
                 └──────── sync feed ← PowerSync service ←───────────┘
 ```
 
+```mermaid
+flowchart TB
+  subgraph upload["Device to server: already on screen"]
+    direction TB
+    screenA["screen<br/>writing device"]
+    sqliteA["local SQLite<br/>writing device"]
+    queue["upload queue"]
+    ud["uploadData()"]
+    api["application API"]
+    pg[("Postgres")]
+    screenA ==>|"immediate local write"| sqliteA
+    sqliteA -->|"screen watches"| screenA
+    sqliteA ==>|"copy of the write"| queue
+    queue ==>|"queued until online"| ud
+    ud ==> api
+    api ==>|"writes"| pg
+  end
+
+  subgraph sync["Server to device"]
+    direction TB
+    ps["PowerSync service"]
+    sqliteB["local SQLite<br/>other device"]
+    screenB["screen<br/>other device"]
+    ps -.->|"sync feed<br/>other devices wait"| sqliteB
+    sqliteB -->|"screen watches"| screenB
+  end
+
+  pg -.->|"change log"| ps
+
+  classDef here fill:#e7f5ee,stroke:#1b4332,color:#1b4332
+  classDef srv fill:#eef2f7,stroke:#334155,color:#0f172a
+  classDef wait fill:#fff4e5,stroke:#9a3412,color:#7c2d12
+  class screenA,sqliteA,queue,ud here
+  class api,pg,ps srv
+  class sqliteB,screenB wait
+
+  style upload fill:#ffffff,stroke:#e7e5e4,color:#1c1917
+  style sync fill:#ffffff,stroke:#e7e5e4,color:#1c1917
+```
+
 Until a write has traveled the whole loop (API, Postgres, replication, sync feed, back into SQLite), other devices cannot see it. The device that made the write already shows it, because it wrote SQLite first.
 
 ## What “no visible interruption” can mean
