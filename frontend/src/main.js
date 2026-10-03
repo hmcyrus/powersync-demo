@@ -58,7 +58,7 @@ db.watch(
 
 db.registerListener({
   statusChanged: (status) => {
-    const uploadError = status.dataFlowStatus?.uploadError;
+    const uploadError = status.uploadError;
     statusEl.textContent = uploadError
       ? `connected: ${status.connected}; upload: ${uploadError.message}`
       : `connected: ${status.connected}`;

@@ -6,9 +6,9 @@ This note is for someone deciding whether a small to-do demo is evidence that Po
 
 The platform’s apps must keep working when the network is gone. A customer who already has data on the device can read and edit with no spinner, no error, and no extra tap to sync. When the network returns, their changes reach the server on their own, and other devices catch up on their own.
 
-The same product ships in the browser and as Android and iOS apps.
+The same product ships in the browser and as Android and iOS apps. The next release (Digital RX curtailed MVP) is narrower: an installed PWA on Chrome and Edge desktop only, for about 100 doctors, each doctor a tenant with at most 3 devices.
 
-The POC is a single shared to-do list on the web. It is a probe of that machinery, not a prototype of the product.
+The POC is a single shared to-do list on the web. It is a probe of that machinery, not a prototype of the product. This note describes what the current to-do demo shows. [POC-PLAN.md](POC-PLAN.md) extends it to answer the go/no-go questions for that release; the open items listed at the end of this note are what the plan tests.
 
 ## How the system actually moves data
 
@@ -20,7 +20,7 @@ Two separate pipes keep that local database aligned with the server.
 
 **Device to server.** A local write is applied to SQLite immediately, and a copy of the write is placed in an upload queue on the device. The PowerSync client later calls a function the app owns, `uploadData()`. That function sends the queued writes to the application API. The API writes Postgres. PowerSync does not write Postgres for the app.
 
-MongoDB in this POC is scratch space for the PowerSync service (its “bucket” store). It is not the to-do database. The to-dos live in Postgres. If the bucket store is wiped, the service can rebuild it from Postgres. If Postgres is wiped, the to-dos are gone.
+MongoDB in this POC is scratch space for the PowerSync service (its “bucket” store). It is not the to-do database. The to-dos live in Postgres. If the bucket store is wiped, the service can rebuild it from Postgres. If Postgres is wiped, the to-dos are gone. The plan replaces MongoDB with a second database on the same Postgres server (test 0.3), as the release's hosting plan requires.
 
 ```text
 screen  →  local SQLite  →  upload queue  →  application API  →  Postgres
@@ -87,7 +87,7 @@ That is the behavior this architecture can deliver. Several things still show up
 
 **The server can change what the customer just saw.** The local screen shows the local write at once. Later the sync feed delivers whatever Postgres actually stored. If the API changes a field, rejects a write, or keeps someone else’s newer write, the row on screen updates to match the server. The customer sees their edit land, then change or disappear, with no error at the moment they tapped. This is the main way an offline app still “interrupts” someone.
 
-**The upload queue is a single file line.** Writes leave the device in order. If one write fails with a server error and the client keeps retrying it, every newer write waits behind it. The author’s screen still looks fine. Other people simply never receive the later edits. A permanent failure has to be settled (accepted, or dropped with a 2xx response) or that customer’s queue stays stuck.
+**The upload queue is a single file line.** Writes leave the device in order. If one write fails with a server error and the client keeps retrying it, every newer write waits behind it. The author’s screen still looks fine. Other people simply never receive the later edits. A permanent failure has to be settled (accepted, or dropped with a 2xx response) or that customer’s queue stays stuck. The plan uploads one local transaction per request and, if any part is invalid, drops the whole transaction, logs it, and returns 2xx. A dropped write can then be lost from the device; recovering it is a production requirement, not built in the POC.
 
 **Another person offline is not a live collaborator.** Two customers can change the same row with no network. Each screen shows its own edit. When both reconnect, Postgres keeps one result. The sync feed then corrects the other screen. Last-write-wins is the POC’s rule. A SaaS product has to choose that rule explicitly. The customer whose edit loses will see it happen late, not at edit time.
 
@@ -115,7 +115,7 @@ These are the facts that make a green demo still a weak signal for the SaaS, or 
 
 **Reads and writes are authorized in different places.** The sync feed decides which rows are copied onto the device. The application API decides which uploads Postgres accepts. A customer who passed the sync rule still has a full copy of those rows in a local database file, including while offline. Removing a column from the API response does nothing if that column is in the sync query: it is already on the device. Logout on a shared device has to delete that local database, or the next person can read it.
 
-**This POC copies every to-do to every client.** The sync query is “all rows in `todos`,” and the API does not check who is calling. That is correct for the demo. It is the wrong shape for a multi-tenant SaaS. The production shape is: the token identifies the user, the sync query returns only that tenant’s rows, and the API refuses uploads that fall outside the same boundary. The POC does not exercise either check. Copying the demo’s sync query into production would publish one customer’s data to all customers.
+**This POC copies every to-do to every client.** The sync query is “all rows in `todos`,” and the API does not check who is calling. That is correct for the demo. It is the wrong shape for a multi-tenant SaaS. The production shape is: the token identifies the user, the sync query returns only that tenant’s rows, and the API refuses uploads that fall outside the same boundary. The POC does not exercise either check yet; the plan adds both (Phase 1). Copying the demo’s sync query into production would publish one customer’s data to all customers.
 
 **The API must tolerate retries.** The queue sends the same write again when a response is lost. The POC does that with a client-generated id and an insert that means “create this id, or replace it if it is already there.” Production writes need the same idea. A create that allocates a new server id on every retry will duplicate rows.
 
@@ -123,7 +123,7 @@ These are the facts that make a green demo still a weak signal for the SaaS, or 
 
 **Validation has a visible cost.** If the API answers “rejected” with an error status, the client retries forever and the queue stalls behind that write. If the API answers success and ignores the write, the local screen keeps the invalid edit until a later sync feed overwrites it. Either path is visible to someone. The POC avoids the choice by accepting almost every write. The product cannot.
 
-**A token for the sync connection is not the app’s login session, and it cannot be long-lived.** The service refuses a token whose lifetime is over 24 hours. The client asks the app for a fresh token when it connects and when the current one is near expiry. The POC signs that token inside the web page with a shared secret. That proves the connection handshake only. A production app gets the token from its own backend after a real login. Offline, an expired sync token is refreshed on the next connect; it must not block local reading and editing.
+**A token for the sync connection is not the app’s login session, and it cannot be long-lived.** The service refuses a token whose lifetime is over 24 hours. The client asks the app for a fresh token when it connects and when the current one is near expiry. The POC signs that token inside the web page with a shared secret. That proves the connection handshake only. A production app gets the token from its own backend after a real login. The plan moves to that shape: an API-issued token signed with an asymmetric key (published as JWKS), short configurable expiry, the tenant as `sub`, and a `device_id` claim. Offline, an expired sync token is refreshed on the next connect; it must not block local reading and editing.
 
 **Postgres must keep a replication slot healthy.** The PowerSync service reads Postgres’s change log. If the service is down for a long time, Postgres retains log data for it and disk use grows. Tables need a primary key so updates and deletes can be replicated. The POC turns this log on and creates one table. It does not show monitoring, failover, or schema change.
 
@@ -137,7 +137,7 @@ The pipes above are the same on every platform. The sync service, the Postgres l
 
 The on-device library is not shared.
 
-- The POC uses the web library: SQLite compiled to WebAssembly, plus a shared worker. All tabs of one browser profile are one database. That quirk does not exist on phones.
+- The POC uses the web library: SQLite compiled to WebAssembly, plus a shared worker. All tabs of one browser profile are one database. That quirk does not exist on phones. The demo runs `@powersync/web` 1.x; the real client runs 2.3.1, so the plan upgrades the POC first (test 0.2) and re-proves everything on that version.
 - Android and iOS use their own PowerSync libraries (Kotlin, Swift, or a React Native / Capacitor shell around a client). They persist SQLite in app storage. The same two functions exist on each: fetch a sync token, and upload the queue.
 - A store app built by wrapping this web page still has the browser’s storage and background limits. A Kotlin or Swift client does not. The POC does not choose or prove which of those the product will ship.
 - On phones the operating system suspends the app. Catch-up runs when the app is in use again. The customer should still see their last local data immediately on open, then see remote changes arrive. The POC never goes to the background, so it does not show this.
@@ -158,3 +158,5 @@ Count it as evidence of the following, and no further:
 - The application API, not PowerSync, is what writes Postgres, and that API must be idempotent and must apply partial updates.
 
 Do not count it as evidence for tenant isolation, login, rejected-write behavior, conflict policy, file sync, schema evolution, replication operations, or Android / iOS packaging. Those decide whether the SaaS feels uninterrupted in production. They are still open after a fully green demo.
+
+[POC-PLAN.md](POC-PLAN.md) tests tenant isolation, stubbed login and device limits, rejected-write behavior (drop and log), a quick last-write-wins check, an additive schema change, a restore drill, and an offline PWA cold start. File sync, Android / iOS, capacity and load, and the real Google sign-in stay out of scope.

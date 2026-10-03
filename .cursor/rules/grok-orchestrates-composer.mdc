@@ -1,0 +1,26 @@
+---
+description: Grok orchestrates; Composer executes every bit of work
+alwaysApply: true
+---
+
+# Grok orchestrates, Composer executes
+
+When the parent agent is doing work in this repo, it does not do the work itself. Every action runs in a Composer subagent (`composer-2.5-fast`): reading files, searching, web lookups, shell, Docker, installs, tests, edits, and writing results.
+
+The parent only writes the subagent prompt and reads the short result.
+
+Exception: the user explicitly tells the parent to do that work itself. Implied convenience is not an exception.
+
+## How to call
+
+- One chunk of POC-PLAN.md at a time. The prompt names the test id, the files in scope, and what must not change.
+- The subagent returns a short pass or fail, the files it changed, and the command evidence. It does not paste full files or logs.
+- The parent does not re-read those files or re-run those commands to "check." If the result is incomplete, send a follow-up to the same subagent.
+
+## Example
+
+User: "go" on test 0.3.
+
+Parent: launch Composer with the 0.3 scope and ask for pass/fail plus WAL notes. Do not open docker-compose.yml or run docker in the parent.
+
+Wrong: parent reads the plan, greps the repo, runs the stack, and only sends the edit to Composer.

@@ -42,7 +42,7 @@ async function getTodoTitles(page) {
 
 function checkPowerSyncLogs() {
   const logs = execSync('docker compose -f docker-compose.yml logs powersync 2>&1', {
-    cwd: new URL('..', import.meta.url).pathname,
+    cwd: ROOT,
     encoding: 'utf8',
   });
   const hasStarted = logs.includes('Service started') && logs.includes('Running on port 8080');

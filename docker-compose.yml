@@ -6,7 +6,7 @@ services:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
-    image: journeyapps/powersync-service:latest
+    image: journeyapps/powersync-service:1.26.1
     command: ["start", "-r", "unified"]
     volumes:
       - ./powersync/service.yaml:/config/service.yaml
