@@ -12,6 +12,7 @@ Versions below are what actually ran.
 | 0.4 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm test`: **18 passed**, 0 failed (14 baseline + 4 stream-form checks). Two tenants via `?tenant=tenant-a|tenant-b` and hand-minted HS256 dev tokens (`sub` = tenant). **Active config: two-stream** (`catalog_shared` + `catalog_own` per POC-PLAN 5.3). Single-stream (`IS NULL OR auth.user_id()`) also accepted by v1.26.1. Shared catalog row: **1 bucket** at 1/50/100 tenants (both forms; `sharedRowCopies=1`, `sharedBuckets=1`). Tenant isolation: each client sees shared + own catalog only. Buckets per client (two-stream): 4 (shared catalog, own catalog, todos, todo_items). See 0.4 notes. |
 | 0.5 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm run test:0.5`: exit **0**. Playwright persistent context synced once online on Vite dev (`localhost:5173`), went offline, closed and reopened the same profile; app booted from cache and showed seeded + local todos (`connected: false`). No COOP/COEP. See 0.5 notes for precache list. |
 | 0.6 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm run test:0.6`: exit **0**. Synced tables `todos`, `todo_items`, `catalog` (with `tenant_id` as planned) are the only members of publication `powersync`; server-only tables `users`, `allowed_emails`, `devices`, `refresh_tokens`, `upload_drops` exist and are excluded. Migration applied to existing volume; PowerSync recreated after publication refresh. See 0.6 notes. |
+| 0.7 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm run test:0.7`: exit **0**. Caddy on port 80 routes `app.localhost` (frontend dist + `/api` strip-proxy to FastAPI) and `sync.localhost` (PowerSync). Stub OIDC (`/auth/oidc/*`, `/oidc/*`), RS256 JWKS at `/.well-known/jwks.json`, `POST /devices/register`, `GET /sync/token`, `POST /sync/upload`; PowerSync `jwks_uri` + `client_auth.cors.allowed_origins` for `http://app.localhost`. Secrets in gitignored `backend/.env` / Docker JWT volume. See 0.7 notes. |
 
 ## 0.1 notes
 
@@ -66,3 +67,12 @@ These are the v2 differences the existing to-do client actually hit. Later chunk
 - **Server-only (not published):** `users` (google_sub, email, tenant_id PK), `allowed_emails`, `devices` (tenant_id, slot 1–3, name, revoked_at), `refresh_tokens`, `upload_drops` (reason + jsonb payload).
 - **Active sync config unchanged:** two-stream `catalog_shared` / `catalog_own` plus `todos` / `todo_items` in `powersync/sync-config.yaml`.
 - **0.6 check:** `e2e/schema-0.6.mjs` via `npm run test:0.6` (SQL-only; no UI, no stream-form spike).
+
+## 0.7 notes (Caddy, stub auth, JWKS, upload API)
+
+- **Caddy:** `caddy/Caddyfile` — `app.localhost` serves `frontend/dist`, strips `/api` to `api:8000`, `sw.js` with `Cache-Control: no-store`; `sync.localhost` reverse-proxies `powersync:8080`. No COOP/COEP.
+- **API (Docker `api` service):** stub OIDC start/authorize/callback with `allowed_emails` gate; session cookie; `POST /devices/register`, `GET /devices`, `DELETE /devices/{id}`; `GET /sync/token` (RS256 JWT, `sub`=tenant, `device_id`, `aud=http://sync.localhost`); `POST /sync/upload` (batch CRUD, tenant stamp, drop-and-log). Legacy `/todos` CRUD retained for prior slices.
+- **JWKS:** asymmetric RSA key persisted in Docker volume `api_jwt_data`; public keys at `GET /.well-known/jwks.json`.
+- **PowerSync:** `client_auth.jwks_uri: http://api:8000/.well-known/jwks.json`, `block_local_jwks: false`, audiences include `http://sync.localhost`; `client_auth.cors.allowed_origins: [http://app.localhost]`.
+- **Secrets:** `backend/.env.example` committed; runtime secrets via gitignored `backend/.env` or container env / JWT volume (HS256 dev secret removed from `service.yaml`).
+- **0.7 check:** `e2e/auth-0.7.mjs` via `npm run test:0.7` (HTTP only; Node uses `127.0.0.1` + `Host: *.localhost` because Windows Node does not resolve `*.localhost`).

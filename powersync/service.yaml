@@ -15,12 +15,12 @@ sync_config:
   path: sync-config.yaml
 
 client_auth:
+  jwks_uri: http://api:8000/.well-known/jwks.json
+  block_local_jwks: false
   audience:
+    - http://sync.localhost
     - http://localhost:8080
     - http://127.0.0.1:8080
-  jwks:
-    keys:
-      - kty: oct
-        alg: HS256
-        k: sNIjdpcb8wPdBbT7m7sc2QVBmVogwxLTcZCzxxbB7qU
-        kid: dev-key-1
+  cors:
+    allowed_origins:
+      - http://app.localhost

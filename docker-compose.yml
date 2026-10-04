@@ -4,6 +4,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      api:
+        condition: service_started
     image: journeyapps/powersync-service:1.26.1
     command: ["start", "-r", "unified"]
     volumes:
@@ -13,6 +15,36 @@ services:
       POWERSYNC_CONFIG_PATH: /config/service.yaml
     ports:
       - "8080:8080"
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-change-me}
+      SYNC_AUDIENCE: http://sync.localhost
+      APP_BASE_URL: http://app.localhost
+    volumes:
+      - api_jwt_data:/data
+    expose:
+      - "8000"
+    ports:
+      - "8000:8000"
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    depends_on:
+      - api
+      - powersync
+    ports:
+      - "80:80"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ./frontend/dist:/srv/frontend:ro
 
   postgres:
     image: postgres:16
@@ -27,6 +59,7 @@ services:
       - ./powersync/02-powersync-storage.sql:/docker-entrypoint-initdb.d/02-powersync-storage.sql
       - ./powersync/03-tenant-schema.sql:/docker-entrypoint-initdb.d/03-tenant-schema.sql
       - ./powersync/04-server-only-tables.sql:/docker-entrypoint-initdb.d/04-server-only-tables.sql
+      - ./powersync/05-seed-allowed-emails.sql:/docker-entrypoint-initdb.d/05-seed-allowed-emails.sql
     ports:
       - "5432:5432"
     command:
@@ -47,3 +80,4 @@ services:
 
 volumes:
   pg_data:
+  api_jwt_data:
