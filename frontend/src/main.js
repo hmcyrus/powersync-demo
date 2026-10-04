@@ -1,5 +1,8 @@
+import { registerSW } from 'virtual:pwa-register';
 import { db } from './db.js';
 import { Connector, getTenantSub, setOnline, getOnline } from './connector.js';
+
+registerSW({ immediate: true });
 
 const listEl = document.getElementById('list');
 const catalogEl = document.getElementById('catalog');

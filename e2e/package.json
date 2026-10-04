@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node pass-checks.mjs"
+    "test": "node pass-checks.mjs",
+    "test:0.5": "node offline-cold-start.mjs"
   },
   "devDependencies": {
     "playwright": "^1.49.0"

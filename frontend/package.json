@@ -3,14 +3,18 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "powersync-web copy-assets -o public",
     "dev": "vite",
-    "build": "vite build"
+    "prebuild": "powersync-web copy-assets -o public",
+    "build": "vite build",
+    "preview": "vite preview --port 5173 --strictPort"
   },
   "dependencies": {
-    "@powersync/web": "2.3.1",
-    "@journeyapps/wa-sqlite": "2.0.4"
+    "@journeyapps/wa-sqlite": "2.0.4",
+    "@powersync/web": "2.3.1"
   },
   "devDependencies": {
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vite-plugin-pwa": "^2.0.0"
   }
 }

@@ -10,6 +10,7 @@ Versions below are what actually ran.
 | 0.2 | Pass locally. | Same 14 checks, 14 passed, after pinning `@powersync/web` **2.3.1**, `@journeyapps/wa-sqlite` **2.0.4** (no ranges), and `journeyapps/powersync-service:1.26.1`. Service log: `Booting PowerSync Service v1.26.1`. Client user agent: `powersync-js/1.2.0 powersync-web`. Sync requests use HTTP (`rid` prefix `h/`, `route: /sync/stream`, `bson: true`). SDK 2.3.1 did not require a newer service. |
 | 0.3 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm test`: 14 passed, 0 failed. Mongo and `mongo-rs-init` removed. `storage.type: postgresql` → `powersync_storage` DB on same Postgres 16 instance. See 0.3 notes for startup/WAL evidence. |
 | 0.4 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm test`: **18 passed**, 0 failed (14 baseline + 4 stream-form checks). Two tenants via `?tenant=tenant-a|tenant-b` and hand-minted HS256 dev tokens (`sub` = tenant). **Active config: two-stream** (`catalog_shared` + `catalog_own` per POC-PLAN 5.3). Single-stream (`IS NULL OR auth.user_id()`) also accepted by v1.26.1. Shared catalog row: **1 bucket** at 1/50/100 tenants (both forms; `sharedRowCopies=1`, `sharedBuckets=1`). Tenant isolation: each client sees shared + own catalog only. Buckets per client (two-stream): 4 (shared catalog, own catalog, todos, todo_items). See 0.4 notes. |
+| 0.5 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm run test:0.5`: exit **0**. Playwright persistent context synced once online on Vite dev (`localhost:5173`), went offline, closed and reopened the same profile; app booted from cache and showed seeded + local todos (`connected: false`). No COOP/COEP. See 0.5 notes for precache list. |
 
 ## 0.1 notes
 
@@ -44,3 +45,16 @@ These are the v2 differences the existing to-do client actually hit. Later chunk
 - **Chosen form:** **two-stream** kept as active `sync-config.yaml` (explicit shared vs own bucket boundary per POC-PLAN 5.3). Single-stream experiment lives in `sync-config-single-stream.yaml` only. Single-stream is viable (same dedup) but not selected as canonical. `sync-config-single-stream.yaml` is retained as a historical artifact and must not be activated or copied over the active config. `scripts/stream-form-spike.mjs` is retained as a historical artifact and must not be run as setup or as the way to choose the sync config.
 - **2026-10-04 config drift fix:** On-disk YAML had drifted to single-stream in both files; restored active two-stream form and moved single-stream to the experiment file only.
 - Local tag `latest` is the same image id as `1.26.1` (`sha256:413a0c813e96…`), so the existing pin `journeyapps/powersync-service:1.26.1` already is the pulled image.
+
+## 0.5 notes (offline cold start spike, Q5)
+
+- **PWA:** `vite-plugin-pwa` with dev SW enabled; `registerSW({ immediate: true })` in `main.js`. No COOP/COEP headers.
+- **Worker path:** `powersync-web copy-assets -o public` → `public/@powersync/worker.js`; `db.js` points database + sync workers at `/@powersync/worker.js` (static, precache-friendly) instead of Vite-bundled default worker URLs.
+- **Storage:** Default SDK 2.3.1 `IDBBatchAtomicVFS` (IndexedDB-backed SQLite) persists across Playwright persistent-context restarts without OPFS/SharedArrayBuffer.
+- **Precache required (production manifest, 29 entries ~7.3 MiB):**
+  - App shell: `index.html`, `manifest.webmanifest`, bundled app JS/CSS (from Vite build).
+  - PowerSync shared worker bundle: `/@powersync/worker.js` plus 11 lazy chunks (`IDBBatchAtomicVFS-*.js`, `FacadeVFS-*.js`, `wa-sqlite-*.js`, `mc-wa-sqlite-*.js`, `websockets-*.js`, other VFS stubs).
+  - wa-sqlite **wasm** (embedded in worker chunks for static bundle; separate `.wasm` assets also emitted on app build: `wa-sqlite-*.wasm`, `wa-sqlite-async-*.wasm`, `mc-wa-sqlite-*.wasm`, `mc-wa-sqlite-async-*.wasm` — largest ~2.5 MiB; `maximumFileSizeToCacheInBytes` raised to 5 MiB).
+  - Dev-only: same-origin runtime cache (`NetworkFirst`) fills Vite dev module URLs (`/src/*`, `/@vite/*`, deps) on first online visit; static `/@powersync/*` in workbox precache.
+- **Not cached:** `/api/*`, PowerSync sync traffic (`localhost:8080`).
+- **0.5 check:** `e2e/offline-cold-start.mjs` (not folded into `pass-checks.mjs` / `runStreamFormSpike()`).
