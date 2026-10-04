@@ -6,7 +6,12 @@
     "test": "node pass-checks.mjs",
     "test:0.5": "node offline-cold-start.mjs",
     "test:0.6": "node schema-0.6.mjs",
-    "test:0.7": "node auth-0.7.mjs"
+    "test:0.7": "node auth-0.7.mjs",
+    "test:0.8": "node harness-0.8.mjs"
+  },
+  "dependencies": {
+    "@powersync/node": "1.1.1",
+    "better-sqlite3": "12.6.2"
   },
   "devDependencies": {
     "playwright": "^1.49.0"
