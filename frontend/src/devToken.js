@@ -19,7 +19,7 @@ function jsonB64url(obj) {
   return bytesToB64url(new TextEncoder().encode(JSON.stringify(obj)));
 }
 
-export async function mintDevToken() {
+export async function mintDevToken(sub = 'dev') {
   const key = await crypto.subtle.importKey(
     'raw',
     b64urlToBytes(SECRET_B64URL),
@@ -30,7 +30,7 @@ export async function mintDevToken() {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'HS256', typ: 'JWT', kid: 'dev-key-1' };
   const payload = {
-    sub: 'dev',
+    sub,
     aud: 'http://localhost:8080',
     iat: now,
     exp: now + 3600,

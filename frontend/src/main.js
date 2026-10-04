@@ -1,7 +1,8 @@
 import { db } from './db.js';
-import { Connector, setOnline, getOnline } from './connector.js';
+import { Connector, getTenantSub, setOnline, getOnline } from './connector.js';
 
 const listEl = document.getElementById('list');
+const catalogEl = document.getElementById('catalog');
 const statusEl = document.getElementById('status');
 const titleInput = document.getElementById('title');
 const addBtn = document.getElementById('add');
@@ -42,6 +43,17 @@ function renderTodos(rows) {
   }
 }
 
+function renderCatalog(rows) {
+  catalogEl.replaceChildren();
+  for (const row of rows) {
+    const li = document.createElement('li');
+    li.textContent = row.name;
+    li.dataset.kind = row.kind;
+    li.dataset.tenant = row.tenant_id ?? 'shared';
+    catalogEl.appendChild(li);
+  }
+}
+
 function updateNetworkLabel() {
   networkBtn.textContent = getOnline() ? 'Online' : 'Offline';
 }
@@ -52,6 +64,16 @@ db.watch(
   {
     onResult: (result) => {
       renderTodos(rowsFromResult(result));
+    },
+  },
+);
+
+db.watch(
+  'SELECT id, tenant_id, name, kind FROM catalog ORDER BY name',
+  [],
+  {
+    onResult: (result) => {
+      renderCatalog(rowsFromResult(result));
     },
   },
 );
@@ -68,9 +90,10 @@ db.registerListener({
 addBtn.addEventListener('click', async () => {
   const title = titleInput.value.trim();
   if (!title) return;
+  const tenantId = getTenantSub();
   await db.execute(
-    'INSERT INTO todos (id, title, is_completed, created_at) VALUES (?, ?, ?, ?)',
-    [crypto.randomUUID(), title, 0, new Date().toISOString()],
+    'INSERT INTO todos (id, tenant_id, title, is_completed, created_at) VALUES (?, ?, ?, ?, ?)',
+    [crypto.randomUUID(), tenantId, title, 0, new Date().toISOString()],
   );
   titleInput.value = '';
 });

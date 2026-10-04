@@ -1,0 +1,17 @@
+# Historical artifact from test 0.4: rejected single-stream experiment (one catalog stream with
+# tenant_id IS NULL OR tenant_id = auth.user_id()). Test 0.4 locked two-stream. Not mounted.
+# Active config is sync-config.yaml (catalog_shared + catalog_own, plus todos and todo_items).
+# Do not activate this file. Do not copy it over sync-config.yaml.
+config:
+  edition: 3
+
+streams:
+  catalog:
+    auto_subscribe: true
+    query: SELECT * FROM catalog WHERE tenant_id IS NULL OR tenant_id = auth.user_id()
+  todos:
+    auto_subscribe: true
+    query: SELECT * FROM todos WHERE tenant_id = auth.user_id()
+  todo_items:
+    auto_subscribe: true
+    query: SELECT * FROM todo_items WHERE tenant_id = auth.user_id()

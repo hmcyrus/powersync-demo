@@ -1,7 +1,19 @@
+# Active sync config (two-stream form locked by test 0.4).
+# sync-config-single-stream.yaml is a historical artifact only; do not use or copy it here.
+# stream-form-spike.mjs is a historical artifact; do not run it or let it overwrite this file.
 config:
   edition: 3
 
 streams:
+  catalog_shared:
+    auto_subscribe: true
+    query: SELECT * FROM catalog WHERE tenant_id IS NULL
+  catalog_own:
+    auto_subscribe: true
+    query: SELECT * FROM catalog WHERE tenant_id = auth.user_id()
   todos:
     auto_subscribe: true
-    query: SELECT * FROM todos
+    query: SELECT * FROM todos WHERE tenant_id = auth.user_id()
+  todo_items:
+    auto_subscribe: true
+    query: SELECT * FROM todo_items WHERE tenant_id = auth.user_id()

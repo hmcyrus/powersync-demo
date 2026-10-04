@@ -2,6 +2,10 @@ import { mintDevToken } from './devToken.js';
 
 let isOnline = true;
 
+export function getTenantSub() {
+  return new URLSearchParams(window.location.search).get('tenant') || 'dev';
+}
+
 export function setOnline(value) {
   isOnline = value;
 }
@@ -14,7 +18,7 @@ export class Connector {
   async fetchCredentials() {
     return {
       endpoint: 'http://localhost:8080',
-      token: await mintDevToken(),
+      token: await mintDevToken(getTenantSub()),
     };
   }
 

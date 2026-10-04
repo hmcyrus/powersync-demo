@@ -113,7 +113,9 @@ later; the upload API works as an idempotent upsert with partial PATCH.
   (rebuild and per-device costs at real scale are measured on the real app).
 - **Same SDK as the real client.** Upgrade the POC frontend to exactly `@powersync/web` 2.3.1 and
   `@journeyapps/wa-sqlite` 2.0.4 (exact pins, no `^`). Pin the PowerSync service image to a specific version
-  (start from v1.26.1; move up only if SDK 2.3.1 requires it, and record the version used). Use a `@powersync/node`
+  (start from v1.26.1; move up only if SDK 2.3.1 requires it, and record the version used). Local tag `latest` is
+  the same image id as `1.26.1` (`sha256:413a0c813e96…`), so the existing pin already is the pulled image. Use a
+  `@powersync/node`
   version that matches for the headless harness.
 - **Atomic uploads.** The client uploads one local transaction at a time (`getNextCrudTransaction`), and
   `/sync/upload` applies it in a single Postgres transaction. If any operation in it is invalid, the **whole
@@ -239,26 +241,29 @@ Order is risk-first: the spikes in Phase 0 can change the design, so they run be
 
 ### Phase 0 - Foundation and design spikes (M)
 
-0.1 Baseline: run the existing 14 checks locally and in CI; record the result. Fix whatever blocks a green run,
+- 0.1 Baseline: run the existing 14 checks locally and in CI; record the result. Fix whatever blocks a green run,
 including the Windows path in `checkPowerSyncLogs()` (use `ROOT`). Add `ci-debug/` to `.gitignore`.
-0.2 SDK alignment: upgrade the frontend to exactly `@powersync/web` 2.3.1 and `@journeyapps/wa-sqlite` 2.0.4; pin
+- 0.2 SDK alignment: upgrade the frontend to exactly `@powersync/web` 2.3.1 and `@journeyapps/wa-sqlite` 2.0.4; pin
 the PowerSync service image; re-run the 14 checks and fix anything the major-version change breaks. Record API
 changes that affect section 10 artifacts.
-0.3 Spike, Postgres bucket storage (Q3): second database for bucket storage, PowerSync `storage.type: postgresql`,
+- 0.3 Spike, Postgres bucket storage (Q3): second database for bucket storage, PowerSync `storage.type: postgresql`,
 remove Mongo. Record startup, permission, replication-role, and replication-slot issues, and baseline WAL size.
-0.4 Spike, stream forms (Q2; was 1.3): with two tenants and hand-minted dev tokens (before real auth exists),
+- 0.4 Spike, stream forms (Q2; was 1.3): with two tenants and hand-minted dev tokens (before real auth exists),
 evaluate (a) the single stream with `IS NULL OR = auth.user_id()` and (b) the two-stream form. For each, record
 whether it is accepted, correct, and whether shared rows are stored once or per tenant (measure bucket storage size
 with 1 vs 50 vs 100 tenants of seeded data). Also record bucket count per client. Pick the form used from here on.
-0.5 Spike, offline cold start (Q5, early version of 2.2): on the current to-do app with SDK 2.3.1, add
+  **Lock (0.4):** two-stream won; `sync-config-single-stream.yaml` remains only as a historical artifact and is not
+  the config to apply. `scripts/stream-form-spike.mjs` is retained as a historical artifact only and is not the
+  config path to apply.
+- 0.5 Spike, offline cold start (Q5, early version of 2.2): on the current to-do app with SDK 2.3.1, add
 `vite-plugin-pwa`, no COOP/COEP; in a Playwright persistent context, sync once, go offline, close and reopen the
 context, load the app offline. It must boot from cache and show local data. Record what had to be precached.
-0.6 Introduce `tenant_id`, the three tables, the narrowed publication, and the server-only tables.
-0.7 Add Caddy, the stub OIDC provider, the FastAPI auth/device/token/upload endpoints, JWKS, and service CORS.
-0.8 Build a headless multi-device harness using `@powersync/node` (each simulated device has its own DB file,
+- 0.6 Introduce `tenant_id`, the three tables, the narrowed publication, and the server-only tables.
+- 0.7 Add Caddy, the stub OIDC provider, the FastAPI auth/device/token/upload endpoints, JWKS, and service CORS.
+- 0.8 Build a headless multi-device harness using `@powersync/node` (each simulated device has its own DB file,
 identity, and connector that talks to the real API). All Phase 1 and Phase 3 scenarios run through it; only Phase 2
 needs a browser (Playwright Chromium). Use `node:test` or vitest.
-0.9 Make CI run the new suite automatically on push or PR (the current workflow is manual-only), after it is stable.
+- 0.9 Make CI run the new suite automatically on push or PR (the current workflow is manual-only), after it is stable.
 
 ### Phase 1 - Security core (M)
 

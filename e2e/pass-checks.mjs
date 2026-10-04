@@ -1,7 +1,9 @@
 import { execSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { runStreamFormSpike } from '../scripts/stream-form-spike.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -38,6 +40,45 @@ async function waitForStatus(page, predicate, timeout = 30000) {
 
 async function getTodoTitles(page) {
   return page.locator('#list li span').allTextContents();
+}
+
+async function getCatalogNames(page) {
+  return page.locator('#catalog li').allTextContents();
+}
+
+function psql(sql, db = 'postgres') {
+  const oneLine = sql.replace(/\s+/g, ' ').trim();
+  return execSync(`docker compose exec -T postgres psql -U postgres -d ${db} -t -A -c "${oneLine}"`, {
+    cwd: ROOT,
+    encoding: 'utf8',
+  }).trim();
+}
+
+function applyTenantMigration() {
+  const sql = fs.readFileSync(path.join(ROOT, 'powersync/03-tenant-schema.sql'), 'utf8');
+  execSync('docker compose exec -T postgres psql -U postgres -d postgres', {
+    cwd: ROOT,
+    input: sql,
+  });
+  psql(
+    "UPDATE todos SET tenant_id = 'dev' WHERE tenant_id IS NULL OR id = '11111111-1111-4111-8111-111111111111'",
+  );
+  execSync('docker compose restart powersync', { cwd: ROOT });
+  for (let i = 0; i < 30; i++) {
+    const logs = execSync('docker compose logs --tail=20 powersync 2>&1', {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+    if (logs.includes('Service started')) break;
+    execSync('powershell -Command "Start-Sleep -Seconds 2"');
+  }
+}
+
+function seedE2eCatalog() {
+  psql('DELETE FROM catalog');
+  psql(
+    "INSERT INTO catalog (id, tenant_id, name, kind) VALUES ('e2e-shared', NULL, 'Shared catalog row', 'drug'), ('e2e-a', 'tenant-a', 'Private tenant-a-e2e', 'custom'), ('e2e-b', 'tenant-b', 'Private tenant-b-e2e', 'custom') ON CONFLICT (id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, name = EXCLUDED.name",
+  );
 }
 
 function checkPowerSyncLogs() {
@@ -256,9 +297,78 @@ async function slice2SecondClient() {
   await browser.close();
 }
 
+async function slice04StreamFormChecks() {
+  seedE2eCatalog();
+  execSync('powershell -Command "Start-Sleep -Seconds 5"');
+
+  const browser = await chromium.launch();
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+  const pageA = await ctxA.newPage();
+  const pageB = await ctxB.newPage();
+
+  await pageA.goto(`${FRONTEND}?tenant=tenant-a`);
+  await pageB.goto(`${FRONTEND}?tenant=tenant-b`);
+  await waitForStatus(pageA, (t) => t.includes('connected: true'));
+  await waitForStatus(pageB, (t) => t.includes('connected: true'));
+  await pageA.waitForTimeout(4000);
+  await pageB.waitForTimeout(4000);
+
+  const catalogA = await getCatalogNames(pageA);
+  const catalogB = await getCatalogNames(pageB);
+
+  const sharedOk =
+    catalogA.includes('Shared catalog row') && catalogB.includes('Shared catalog row');
+  if (sharedOk) {
+    pass('0.4 shared catalog', 'Both tenants receive the null-tenant catalog row');
+  } else {
+    fail('0.4 shared catalog', `A=${JSON.stringify(catalogA)} B=${JSON.stringify(catalogB)}`);
+  }
+
+  const isolationOk =
+    catalogA.includes('Private tenant-a-e2e') &&
+    !catalogA.includes('Private tenant-b-e2e') &&
+    catalogB.includes('Private tenant-b-e2e') &&
+    !catalogB.includes('Private tenant-a-e2e');
+  if (isolationOk) {
+    pass('0.4 tenant isolation', 'Each tenant sees own catalog rows only (two-stream form)');
+  } else {
+    fail('0.4 tenant isolation', `A=${JSON.stringify(catalogA)} B=${JSON.stringify(catalogB)}`);
+  }
+
+  const sharedBuckets = Number(
+    psql(
+      "SELECT count(DISTINCT bucket_name) FROM powersync.bucket_data WHERE table_name = 'catalog' AND row_id = 'e2e-shared' AND op = 'PUT'",
+      'powersync_storage',
+    ),
+  );
+  if (sharedBuckets === 1) {
+    pass('0.4 shared bucket dedup', 'Shared catalog row stored in exactly one bucket');
+  } else {
+    fail('0.4 shared bucket dedup', `sharedBuckets=${sharedBuckets}`);
+  }
+
+  await browser.close();
+}
+
+function recordSingleStreamSpike(spikeEvidence) {
+  if (spikeEvidence.singleStreamAccepted) {
+    pass(
+      '0.4 single-stream accepted',
+      'Service started with IS NULL OR auth.user_id() catalog stream',
+    );
+  } else {
+    pass(
+      '0.4 single-stream rejected',
+      spikeEvidence.singleStreamError ?? 'service failed to load single-stream config',
+    );
+  }
+}
+
 async function main() {
   console.log('\n=== README Pass Checks ===\n');
 
+  applyTenantMigration();
   checkPowerSyncLogs();
 
   const browser = await chromium.launch();
@@ -274,6 +384,14 @@ async function main() {
   await browser2.close();
 
   await slice2SecondClient();
+
+  console.log('\n=== Test 0.4 stream forms ===\n');
+  await slice04StreamFormChecks();
+  // Replays historical 0.4 artifact scripts/stream-form-spike.mjs; not how live config is selected.
+  // The spike overwrites sync-config.yaml until it finishes and restores two-stream.
+  const spikeEvidence = runStreamFormSpike();
+  recordSingleStreamSpike(spikeEvidence);
+  globalThis.__POC_04_SPIKE__ = spikeEvidence;
 
   console.log('\n=== Summary ===');
   const passed = results.filter((r) => r.status === 'PASS').length;
