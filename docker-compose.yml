@@ -26,6 +26,7 @@ services:
       - ./powersync/init.sql:/docker-entrypoint-initdb.d/01-todos.sql
       - ./powersync/02-powersync-storage.sql:/docker-entrypoint-initdb.d/02-powersync-storage.sql
       - ./powersync/03-tenant-schema.sql:/docker-entrypoint-initdb.d/03-tenant-schema.sql
+      - ./powersync/04-server-only-tables.sql:/docker-entrypoint-initdb.d/04-server-only-tables.sql
     ports:
       - "5432:5432"
     command:

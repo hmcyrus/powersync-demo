@@ -11,6 +11,7 @@ Versions below are what actually ran.
 | 0.3 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm test`: 14 passed, 0 failed. Mongo and `mongo-rs-init` removed. `storage.type: postgresql` → `powersync_storage` DB on same Postgres 16 instance. See 0.3 notes for startup/WAL evidence. |
 | 0.4 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm test`: **18 passed**, 0 failed (14 baseline + 4 stream-form checks). Two tenants via `?tenant=tenant-a|tenant-b` and hand-minted HS256 dev tokens (`sub` = tenant). **Active config: two-stream** (`catalog_shared` + `catalog_own` per POC-PLAN 5.3). Single-stream (`IS NULL OR auth.user_id()`) also accepted by v1.26.1. Shared catalog row: **1 bucket** at 1/50/100 tenants (both forms; `sharedRowCopies=1`, `sharedBuckets=1`). Tenant isolation: each client sees shared + own catalog only. Buckets per client (two-stream): 4 (shared catalog, own catalog, todos, todo_items). See 0.4 notes. |
 | 0.5 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm run test:0.5`: exit **0**. Playwright persistent context synced once online on Vite dev (`localhost:5173`), went offline, closed and reopened the same profile; app booted from cache and showed seeded + local todos (`connected: false`). No COOP/COEP. See 0.5 notes for precache list. |
+| 0.6 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm run test:0.6`: exit **0**. Synced tables `todos`, `todo_items`, `catalog` (with `tenant_id` as planned) are the only members of publication `powersync`; server-only tables `users`, `allowed_emails`, `devices`, `refresh_tokens`, `upload_drops` exist and are excluded. Migration applied to existing volume; PowerSync recreated after publication refresh. See 0.6 notes. |
 
 ## 0.1 notes
 
@@ -58,3 +59,10 @@ These are the v2 differences the existing to-do client actually hit. Later chunk
   - Dev-only: same-origin runtime cache (`NetworkFirst`) fills Vite dev module URLs (`/src/*`, `/@vite/*`, deps) on first online visit; static `/@powersync/*` in workbox precache.
 - **Not cached:** `/api/*`, PowerSync sync traffic (`localhost:8080`).
 - **0.5 check:** `e2e/offline-cold-start.mjs` (not folded into `pass-checks.mjs` / `runStreamFormSpike()`).
+
+## 0.6 notes (tenant schema and server-only tables)
+
+- **Synced (published):** `todos` (`tenant_id text NOT NULL`), `todo_items` (`tenant_id text NOT NULL`), `catalog` (`tenant_id text NULL` for shared rows). Publication: `CREATE PUBLICATION powersync FOR TABLE todos, todo_items, catalog`.
+- **Server-only (not published):** `users` (google_sub, email, tenant_id PK), `allowed_emails`, `devices` (tenant_id, slot 1–3, name, revoked_at), `refresh_tokens`, `upload_drops` (reason + jsonb payload).
+- **Active sync config unchanged:** two-stream `catalog_shared` / `catalog_own` plus `todos` / `todo_items` in `powersync/sync-config.yaml`.
+- **0.6 check:** `e2e/schema-0.6.mjs` via `npm run test:0.6` (SQL-only; no UI, no stream-form spike).

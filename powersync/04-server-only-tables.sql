@@ -1,27 +1,4 @@
-CREATE TABLE IF NOT EXISTS todos (
-  id uuid PRIMARY KEY,
-  tenant_id text NOT NULL DEFAULT 'dev',
-  title text NOT NULL,
-  is_completed integer NOT NULL DEFAULT 0,
-  created_at timestamptz NOT NULL,
-  code text
-);
-
-CREATE TABLE IF NOT EXISTS todo_items (
-  id text PRIMARY KEY,
-  tenant_id text NOT NULL,
-  todo_id text NOT NULL,
-  text text NOT NULL,
-  done integer NOT NULL DEFAULT 0,
-  seq integer NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS catalog (
-  id text PRIMARY KEY,
-  tenant_id text,
-  name text NOT NULL,
-  kind text NOT NULL
-);
+-- Migration for existing Postgres volumes (test 0.6). Fresh installs use init.sql.
 
 CREATE TABLE IF NOT EXISTS users (
   tenant_id text PRIMARY KEY,
@@ -59,5 +36,6 @@ CREATE TABLE IF NOT EXISTS upload_drops (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Narrowed publication: synced tables only (idempotent on existing volumes).
 DROP PUBLICATION IF EXISTS powersync;
 CREATE PUBLICATION powersync FOR TABLE todos, todo_items, catalog;
