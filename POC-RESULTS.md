@@ -14,6 +14,7 @@ Versions below are what actually ran.
 | 0.6 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm run test:0.6`: exit **0**. Synced tables `todos`, `todo_items`, `catalog` (with `tenant_id` as planned) are the only members of publication `powersync`; server-only tables `users`, `allowed_emails`, `devices`, `refresh_tokens`, `upload_drops` exist and are excluded. Migration applied to existing volume; PowerSync recreated after publication refresh. See 0.6 notes. |
 | 0.7 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm run test:0.7`: exit **0**. Caddy on port 80 routes `app.localhost` (frontend dist + `/api` strip-proxy to FastAPI) and `sync.localhost` (PowerSync). Stub OIDC (`/auth/oidc/*`, `/oidc/*`), RS256 JWKS at `/.well-known/jwks.json`, `POST /devices/register`, `GET /sync/token`, `POST /sync/upload`; PowerSync `jwks_uri` + `client_auth.cors.allowed_origins` for `http://app.localhost`. Secrets in gitignored `backend/.env` / Docker JWT volume. See 0.7 notes. |
 | 0.8 | Pass locally. | 2026-10-04, Windows, `cd e2e; npm run test:0.8`: exit **0**. Headless multi-device harness under `e2e/harness/` (`@powersync/node` **1.1.1**, `@powersync/common` **2.3.1**, `better-sqlite3` **12.6.2**): each simulated device gets its own SQLite file (`rx-<tenant>-<deviceId>.db`), identity (session + registered device), and `HarnessConnector` (real `/sync/token` + `/sync/upload` via Caddy loopback). Check opens two devices and connects without Playwright. See 0.8 notes. |
+| 0.9 | Pass locally. GitHub not executed. | 2026-10-04, Windows, `cd e2e; npm run test:0.9`: exit **0**. Added `.github/workflows/poc-suite.yml` (auto `push` + `pull_request`) running `npm run test:0.6`, `test:0.7`, `test:0.8`, `test:0.5` against Docker + frontend build/dist + Vite dev; excludes `pass-checks.mjs` and `stream-form-spike.mjs`. Manual-only `.github/workflows/pass-checks.yml` retained. Local validator: `e2e/ci-0.9.mjs`. See 0.9 notes. |
 
 ## 0.1 notes
 
@@ -86,3 +87,10 @@ These are the v2 differences the existing to-do client actually hit. Later chunk
 - **Connector:** `fetchCredentials` → `GET /sync/token`; `uploadData` → `getNextCrudTransaction()` + `POST /sync/upload` + `transaction.complete()`.
 - **Device slots:** harness hard-deletes revoked / `e2e-device-*` / `harness-*` rows before registering (soft revoke leaves `UNIQUE (tenant_id, slot)` occupied).
 - **0.8 check:** `e2e/harness-0.8.mjs` via `npm run test:0.8` (two headless clients, no Playwright).
+
+## 0.9 notes (CI automation)
+
+- **Workflow:** `.github/workflows/poc-suite.yml` — triggers on `push` and `pull_request`; `docker compose up`, PowerSync liveness wait, Postgres seed, `frontend` `npm ci` + `build` (Caddy `dist`), e2e `npm ci` + Playwright Chromium, Vite dev for 0.5, then `test:0.6` → `test:0.7` → `test:0.8` → `test:0.5`.
+- **Excluded:** `e2e/pass-checks.mjs` (`npm test`), `scripts/stream-form-spike.mjs` — not invoked by the new workflow.
+- **Retained:** `.github/workflows/pass-checks.yml` remains manual-only (`workflow_dispatch`) for the historical 14-check suite.
+- **0.9 check:** `e2e/ci-0.9.mjs` via `npm run test:0.9` (YAML + trigger + script-name + `docker compose up` / frontend build validation; no GitHub dispatch).
