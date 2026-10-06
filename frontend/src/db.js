@@ -1,5 +1,4 @@
 import { column, PowerSyncDatabase, Schema, Table } from '@powersync/web';
-import { getTenantSub } from './connector.js';
 
 const todos = new Table({
   tenant_id: column.text,
@@ -25,16 +24,28 @@ const todoItems = new Table({
 
 export const AppSchema = new Schema({ todos, catalog, todo_items: todoItems });
 
-const tenant = getTenantSub();
 const POWERSYNC_WORKER = '/@powersync/worker.js';
 
-export const db = new PowerSyncDatabase({
-  schema: AppSchema,
-  database: {
-    dbFilename: `todos-${tenant}.db`,
-    worker: POWERSYNC_WORKER,
-  },
-  sync: {
-    worker: POWERSYNC_WORKER,
-  },
-});
+let dbInstance = null;
+
+export function initDb(tenantId) {
+  if (dbInstance) return dbInstance;
+  dbInstance = new PowerSyncDatabase({
+    schema: AppSchema,
+    database: {
+      dbFilename: `todos-${tenantId}.db`,
+      worker: POWERSYNC_WORKER,
+    },
+    sync: {
+      worker: POWERSYNC_WORKER,
+    },
+  });
+  return dbInstance;
+}
+
+export function getDb() {
+  if (!dbInstance) {
+    throw new Error('Database not initialized');
+  }
+  return dbInstance;
+}

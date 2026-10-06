@@ -10,9 +10,11 @@ http://app.localhost {
 		reverse_proxy api:8000
 	}
 
-	root * /srv/frontend
-	try_files {path} /index.html
-	file_server
+	handle {
+		root * /srv/frontend
+		try_files {path} /index.html
+		file_server
+	}
 }
 
 http://sync.localhost {

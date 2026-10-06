@@ -9,6 +9,11 @@
   <body>
     <h1>Todos</h1>
     <p id="status">Connecting…</p>
+    <div id="auth-panel" hidden>
+      <p>Sign in to sync your todos across devices.</p>
+      <a id="sign-in" href="/api/auth/oidc/start?email=doctor@example.com">Sign in</a>
+    </div>
+    <div id="app-panel" hidden>
     <div class="add-row">
       <input id="title" type="text" placeholder="New todo title" />
       <button id="add" type="button">Add</button>
@@ -17,6 +22,7 @@
     <h2>Catalog</h2>
     <ul id="catalog"></ul>
     <ul id="list"></ul>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

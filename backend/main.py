@@ -217,6 +217,7 @@ def register_device(body: dict, session=Depends(require_session)):
                     "tenant_id": existing[1],
                     "slot": existing[2],
                     "name": existing[3],
+                    "email": session["email"],
                 }
 
             if len(active) >= 3:
@@ -236,7 +237,13 @@ def register_device(body: dict, session=Depends(require_session)):
                 (device_id, tenant_id, slot, name),
             )
         conn.commit()
-    return {"id": device_id, "tenant_id": tenant_id, "slot": slot, "name": name}
+    return {
+        "id": device_id,
+        "tenant_id": tenant_id,
+        "slot": slot,
+        "name": name,
+        "email": session["email"],
+    }
 
 
 @app.get("/devices")
@@ -341,11 +348,11 @@ def list_todos():
 
 
 @app.post("/todos")
-def create_todo(body: dict):
+def create_todo(body: dict, session=Depends(require_session)):
     if "title" not in body or body["title"] is None:
         raise HTTPException(status_code=500, detail="title is required")
 
-    tenant_id = body.get("tenant_id") or "dev"
+    tenant_id = session["tenant_id"]
 
     try:
         with get_conn() as conn:
@@ -355,11 +362,11 @@ def create_todo(body: dict):
                     INSERT INTO todos (id, tenant_id, title, is_completed, created_at, code)
                     VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (id) DO UPDATE SET
-                      tenant_id = EXCLUDED.tenant_id,
                       title = EXCLUDED.title,
                       is_completed = EXCLUDED.is_completed,
                       created_at = EXCLUDED.created_at,
                       code = EXCLUDED.code
+                    WHERE todos.tenant_id = %s
                     """,
                     (
                         body["id"],
@@ -368,6 +375,7 @@ def create_todo(body: dict):
                         body.get("is_completed", 0),
                         body.get("created_at"),
                         body.get("code"),
+                        tenant_id,
                     ),
                 )
             conn.commit()
@@ -377,11 +385,12 @@ def create_todo(body: dict):
 
 
 @app.patch("/todos/{todo_id}")
-def patch_todo(todo_id: str, body: dict):
+def patch_todo(todo_id: str, body: dict, session=Depends(require_session)):
+    tenant_id = session["tenant_id"]
     sets = []
     values = []
     for key in ALLOWED_PATCH_FIELDS:
-        if key in body:
+        if key in body and key != "tenant_id":
             sets.append(f"{key} = %s")
             values.append(body[key])
 
@@ -389,8 +398,8 @@ def patch_todo(todo_id: str, body: dict):
         with get_conn() as conn:
             with conn.cursor() as cur:
                 if sets:
-                    sql = f"UPDATE todos SET {', '.join(sets)} WHERE id = %s"
-                    values.append(todo_id)
+                    sql = f"UPDATE todos SET {', '.join(sets)} WHERE id = %s AND tenant_id = %s"
+                    values.extend([todo_id, tenant_id])
                     cur.execute(sql, values)
             conn.commit()
     except Exception as e:
@@ -399,11 +408,15 @@ def patch_todo(todo_id: str, body: dict):
 
 
 @app.delete("/todos/{todo_id}")
-def delete_todo(todo_id: str):
+def delete_todo(todo_id: str, session=Depends(require_session)):
+    tenant_id = session["tenant_id"]
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM todos WHERE id = %s", (todo_id,))
+                cur.execute(
+                    "DELETE FROM todos WHERE id = %s AND tenant_id = %s",
+                    (todo_id, tenant_id),
+                )
             conn.commit()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

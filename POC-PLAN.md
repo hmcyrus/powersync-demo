@@ -223,21 +223,19 @@ rejects it or it stores shared rows per tenant, record that and keep the two-str
 ### 5.5 Client changes (frontend, minimal)
 
 - `@powersync/web` 2.3.1 and `@journeyapps/wa-sqlite` 2.0.4, exact pins (test 0.2).
-- Identity record in `localStorage` (tenant, device id, slot, email); DB filename `rx-<tenant>.db`.
-- Boot order: known identity -> open local DB and render immediately, connect in the background; no identity ->
-  sign-in, device registration, "preparing your offline copy" until first sync completes.
-- Connector: `fetchCredentials` calls `/sync/token`, must never block rendering when offline; `uploadData` takes one
-  transaction with `getNextCrudTransaction()`, posts it to `/sync/upload`, then calls `complete()`.
-- UI: sync status with unsynced-change count (`getUploadQueueStats` or equivalent), "device removed" screen offering
-  wipe (`disconnectAndClear`), device list with remove buttons, a todo list with child items and a `code` field.
-- PWA: `vite-plugin-pwa`, precache app shell plus PowerSync wasm and worker files, never cache `/api` or sync
-  traffic, `navigator.storage.persist()`, "reload to update" prompt (never auto-reload mid-edit).
-- No COOP/COEP in the Vite dev config or Caddy; confirm the default IndexedDB-based storage works on SDK 2.3.1.
+- Identity record in `localStorage` (tenant, device id, slot, email) and DB filename `rx-<tenant>.db` (tests 2.1 and 2.2). The harness identity from test 0.8 does not satisfy this bullet.
+- Boot order (tests 2.1, 2.2, and 2.8): known identity opens the local DB and renders immediately, then connects in the background; no identity goes through sign-in, device registration, and "preparing your offline copy" until first sync completes.
+- Connector: `fetchCredentials` calls `/sync/token` (test 2.1) and must never block rendering when offline (test 2.2); `uploadData` takes one transaction with `getNextCrudTransaction()`, posts it to `/sync/upload`, then calls `complete()` (test 2.4).
+- UI: sync status with unsynced-change count (test 2.3), "device removed" screen offering wipe via `disconnectAndClear` (test 1.13), device list with remove buttons (tests 1.12 and 1.13), a todo list with child items (test 2.3) and a `code` field (test 3.3).
+- PWA (tests 0.5 and 2.1): `vite-plugin-pwa`, precache app shell plus PowerSync wasm and worker files, never cache `/api` or sync traffic. `navigator.storage.persist()` is test 2.9. "Reload to update" with no auto-reload mid-edit is test 2.7.
+- No COOP/COEP in the Vite dev config or Caddy (tests 0.5 and 2.1).
 
 ## 6. Phased test plan
 
 Effort tags: S small, M medium, L large. Each test has an ID so results can be tabulated in the final report.
 Order is risk-first: the spikes in Phase 0 can change the design, so they run before more is built on them.
+
+**Standing rule:** Keep one current-app script. It loads `http://app.localhost/` and asserts only the live contracts: sign-in, `connected: true`, and the stored `tenant_id` on the route Add calls. When a test changes one of those, that same test edits the script. Any older script that still uses a retired URL or contract is marked historical in that test and is not run again. A build pass runs the new test, plus the current-app script only when this pass changed it.
 
 ### Phase 0 - Foundation and design spikes (M)
 
@@ -260,9 +258,9 @@ with 1 vs 50 vs 100 tenants of seeded data). Also record bucket count per client
 context, load the app offline. It must boot from cache and show local data. Record what had to be precached.
 - 0.6 Introduce `tenant_id`, the three tables, the narrowed publication, and the server-only tables.
 - 0.7 Add Caddy, the stub OIDC provider, the FastAPI auth/device/token/upload endpoints, JWKS, and service CORS.
+  **Lock (manual bugs after 0.7):** JWKS moved to `poc-key-1` while the page still minted `dev-key-1`, and Add still wrote `tenant_id` `dev` through `POST /todos`. Both were fixed on the page afterward. `e2e/pass-checks.mjs` and `e2e/offline-cold-start.mjs` still open `http://localhost:5173` and are historical; they are not run again. The standing rule is what stops that split.
 - 0.8 Build a headless multi-device harness using `@powersync/node` (each simulated device has its own DB file,
-identity, and connector that talks to the real API). All Phase 1 and Phase 3 scenarios run through it; only Phase 2
-needs a browser (Playwright Chromium). Use `node:test` or vitest.
+identity, and connector that talks to the real API). Phase 1 and Phase 3 scenarios run through it. When the contract under test is one the page still uses, the harness does not replace the browser check in the standing rule. Use `node:test` or vitest.
 - 0.9 Make CI run the new suite automatically on push or PR (the current workflow is manual-only), after it is stable.
 
 ### Phase 1 - Security core (M)
@@ -278,7 +276,7 @@ Isolation (Q1, Q2):
 
 Upload hardening (Q1, Q8):
 - 1.5 Tenant spoof: client sends `tenant_id` of another tenant in PUT/PATCH; server stamps from the token and the
-  stored row is correct.
+  stored row is correct. Include the route the Add button calls, and `/sync/upload` when that is a different route.
 - 1.6 Id collision attack: tenant A PUTs/PATCHes/DELETEs an `id` owned by tenant B. Row B unchanged, no leak of its
   existence in the response, and the drop is logged.
 - 1.7 Shared catalog protection: a device cannot create, update, or delete a null-tenant `catalog` row; it can create
@@ -313,6 +311,7 @@ and stopping the `sync`/`api` containers. Use at least two contexts as two devic
 
 - 2.1 Install flow: sign in, register device, "preparing your offline copy" until first sync; then the service worker
   is active and all app assets (including PowerSync wasm and workers) are precached. Verify no COOP/COEP is needed.
+  Browser check at `http://app.localhost/`: `connected: true`, and the stored `tenant_id` is the session tenant.
 - 2.2 After first sync, go offline, **close and reopen the browser context** (persistent context, same user data
   dir), load the app URL offline: it boots from cache and local DB, shows data, no blocking spinner, no error beyond
   a status banner.

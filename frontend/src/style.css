@@ -19,6 +19,27 @@ h1 {
   font-size: 0.9rem;
 }
 
+#auth-panel {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+#auth-panel a {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background: #2563eb;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+#auth-panel a:hover {
+  background: #1d4ed8;
+}
+
 .add-row {
   display: flex;
   gap: 0.5rem;

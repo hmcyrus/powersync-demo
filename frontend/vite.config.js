@@ -14,6 +14,7 @@ const powersyncPrecache = fs.existsSync(powersyncDir)
   : [];
 
 export default defineConfig({
+  build: { target: 'esnext' },
   optimizeDeps: { exclude: ['@powersync/web', '@journeyapps/wa-sqlite'] },
   worker: { format: 'es' },
   plugins: [
