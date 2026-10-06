@@ -156,11 +156,25 @@ export async function deleteDevice(sessionCookie, deviceId) {
 }
 
 function psql(sql) {
+  runPsql(sql);
+}
+
+export function runPsql(sql) {
   const oneLine = sql.replace(/\s+/g, ' ').trim();
   execSync(`docker compose exec -T postgres psql -U postgres -d postgres -c "${oneLine}"`, {
     cwd: ROOT,
     stdio: 'pipe',
   });
+}
+
+export function psqlQuery(sql) {
+  const oneLine = sql.replace(/\s+/g, ' ').trim();
+  const out = execSync(
+    `docker compose exec -T postgres psql -U postgres -d postgres -t -A -c "${oneLine}"`,
+    { cwd: ROOT, encoding: 'utf8' },
+  ).trim();
+  if (!out) return [];
+  return JSON.parse(out);
 }
 
 /** Free slots: hard-delete revoked and prior test/harness rows (soft revoke keeps UNIQUE slot). */
