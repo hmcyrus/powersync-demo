@@ -34,11 +34,11 @@ export async function createIdentity({
 }
 
 export class SimulatedDevice {
-  constructor({ identity, dbDir }) {
+  constructor({ identity, dbDir, connector }) {
     this.identity = identity;
     this.dbDir = dbDir;
     this.db = null;
-    this.connector = new HarnessConnector(identity);
+    this.connector = connector ?? new HarnessConnector(identity);
   }
 
   async open() {
@@ -54,11 +54,11 @@ export class SimulatedDevice {
     return this;
   }
 
-  async connect() {
+  async connect(options) {
     if (!this.db) {
       throw new Error('call open() before connect()');
     }
-    await this.db.connect(this.connector);
+    await this.db.connect(this.connector, options);
     return this;
   }
 
@@ -85,6 +85,7 @@ export async function openDevice(options) {
   const device = new SimulatedDevice({
     identity,
     dbDir: options.dbDir,
+    connector: options.connector,
   });
   await device.open();
   return device;

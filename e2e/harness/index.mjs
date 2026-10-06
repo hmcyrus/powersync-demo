@@ -11,6 +11,14 @@ export {
   runPsql,
   signIn,
 } from './api-client.mjs';
+export { AttackConnector } from './attack-connector.mjs';
+export {
+  expiredToken,
+  fetchApiPrivateKeyPem,
+  forgedClaimsToken,
+  legitimateTokenForIdentity,
+  wrongKeyOtherTenantToken,
+} from './attack-tokens.mjs';
 export { HarnessConnector } from './connector.mjs';
 export {
   assertNoForeignTenantRows,
