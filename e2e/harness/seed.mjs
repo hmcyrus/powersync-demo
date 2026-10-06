@@ -2,6 +2,13 @@ import { runPsql, psqlQuery } from './api-client.mjs';
 
 const SYNC_TABLES = ['todos', 'todo_items', 'catalog'];
 
+export const SERVER_ONLY_TABLES = ['users', 'allowed_emails', 'devices', 'refresh_tokens'];
+
+export const H14_LEAK_EMAIL = 'h14-leak-test@example.com';
+export const H14_LEAK_TENANT = 'h14-leak-tenant';
+export const H14_LEAK_DEVICE = 'h14-leak-device';
+export const H14_LEAK_RT = 'h14-leak-rt';
+
 export function clearSyncedTables() {
   for (const table of SYNC_TABLES) {
     runPsql(`DELETE FROM ${table}`);
@@ -60,4 +67,61 @@ export function expectedServerRows(tenantId) {
       `) t`,
   );
   return { catalog, todos, todo_items: todoItems };
+}
+
+export function clearServerOnlyLeakMarkers() {
+  runPsql(`DELETE FROM refresh_tokens WHERE id = '${H14_LEAK_RT}'`);
+  runPsql(`DELETE FROM devices WHERE id = '${H14_LEAK_DEVICE}'`);
+  runPsql(`DELETE FROM users WHERE tenant_id = '${H14_LEAK_TENANT}'`);
+  runPsql(`DELETE FROM allowed_emails WHERE email = '${H14_LEAK_EMAIL}'`);
+}
+
+/** Distinctive rows in all four server-only tables (test 1.4). */
+export function seedServerOnlyLeakMarkers() {
+  clearServerOnlyLeakMarkers();
+  runPsql(
+    `INSERT INTO allowed_emails (email) VALUES ('${H14_LEAK_EMAIL}')`,
+  );
+  runPsql(
+    `INSERT INTO users (tenant_id, google_sub, email) VALUES ` +
+      `('${H14_LEAK_TENANT}', 'h14-google-sub', '${H14_LEAK_EMAIL}')`,
+  );
+  runPsql(
+    `INSERT INTO devices (id, tenant_id, slot, name) VALUES ` +
+      `('${H14_LEAK_DEVICE}', '${H14_LEAK_TENANT}', 1, 'h14-leak-device')`,
+  );
+  runPsql(
+    `INSERT INTO refresh_tokens (id, tenant_id, token_hash, expires_at) VALUES ` +
+      `('${H14_LEAK_RT}', '${H14_LEAK_TENANT}', 'h14-fake-hash', now() + interval '1 year')`,
+  );
+}
+
+export function verifyServerOnlyLeakMarkersOnServer() {
+  const allowed = psqlQuery(
+    `SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json) FROM (` +
+      `SELECT email FROM allowed_emails WHERE email = '${H14_LEAK_EMAIL}'` +
+      `) t`,
+  );
+  const users = psqlQuery(
+    `SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json) FROM (` +
+      `SELECT tenant_id, google_sub, email FROM users WHERE tenant_id = '${H14_LEAK_TENANT}'` +
+      `) t`,
+  );
+  const devices = psqlQuery(
+    `SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json) FROM (` +
+      `SELECT id, tenant_id, slot, name FROM devices WHERE id = '${H14_LEAK_DEVICE}'` +
+      `) t`,
+  );
+  const refreshTokens = psqlQuery(
+    `SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json) FROM (` +
+      `SELECT id, tenant_id, token_hash FROM refresh_tokens WHERE id = '${H14_LEAK_RT}'` +
+      `) t`,
+  );
+  if (allowed.length !== 1 || users.length !== 1 || devices.length !== 1 || refreshTokens.length !== 1) {
+    throw new Error(
+      `server-only marker rows missing on Postgres: ` +
+        `allowed=${allowed.length} users=${users.length} devices=${devices.length} refresh_tokens=${refreshTokens.length}`,
+    );
+  }
+  return { allowed, users, devices, refresh_tokens: refreshTokens };
 }

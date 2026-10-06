@@ -22,7 +22,9 @@ export {
 export { HarnessConnector } from './connector.mjs';
 export {
   assertNoForeignTenantRows,
+  assertServerOnlyAbsentFromClient,
   canonicalRows,
+  listLocalTableNames,
   readAllLocalRows,
   readLocalTable,
   rowsEqual,
@@ -30,11 +32,19 @@ export {
 } from './local-db.mjs';
 export {
   allowEmail,
+  clearServerOnlyLeakMarkers,
   clearSyncedTables,
   expectedServerRows,
+  H14_LEAK_DEVICE,
+  H14_LEAK_EMAIL,
+  H14_LEAK_RT,
+  H14_LEAK_TENANT,
   seedIsolationFixtures,
+  seedServerOnlyLeakMarkers,
+  SERVER_ONLY_TABLES,
   TODO_A_ID,
   TODO_B_ID,
+  verifyServerOnlyLeakMarkersOnServer,
 } from './seed.mjs';
 export { AppSchema } from './schema.mjs';
 export { SimulatedDevice, createIdentity, dbFilenameForIdentity, openDevice } from './device.mjs';

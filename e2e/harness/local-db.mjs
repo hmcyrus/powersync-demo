@@ -1,5 +1,7 @@
 const SYNC_TABLES = ['catalog', 'todos', 'todo_items'];
 
+export const SERVER_ONLY_TABLES = ['users', 'allowed_emails', 'devices', 'refresh_tokens'];
+
 function normalizeValue(key, value) {
   if (value == null) return null;
   if (key === 'created_at') {
@@ -56,6 +58,54 @@ export async function waitForLocalRows(device, expectedByTable, { timeoutMs = 90
   throw new Error(
     `sync timeout: tables still mismatched: ${mismatches.join(', ')}`,
   );
+}
+
+export async function listLocalTableNames(db) {
+  const rows = await db.getAll(
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
+  );
+  return rows.map((r) => r.name);
+}
+
+/** Server-only tables must not exist locally, and marker values must not appear anywhere. */
+export async function assertServerOnlyAbsentFromClient(db, markers = {}) {
+  const present = await db.getAll(
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${SERVER_ONLY_TABLES.map((t) => `'${t}'`).join(', ')})`,
+  );
+  if (present.length > 0) {
+    throw new Error(`server-only tables present in local DB: ${present.map((r) => r.name).join(', ')}`);
+  }
+
+  const needleValues = [
+    markers.email,
+    markers.tenantId,
+    markers.deviceId,
+    markers.refreshTokenId,
+    markers.googleSub,
+    markers.tokenHash,
+  ].filter(Boolean);
+
+  if (needleValues.length === 0) {
+    return;
+  }
+
+  const tables = await listLocalTableNames(db);
+  for (const table of tables) {
+    const rows = await db.getAll(`SELECT * FROM ${table}`);
+    for (const row of rows) {
+      for (const value of Object.values(row)) {
+        if (value == null) continue;
+        const text = String(value);
+        for (const needle of needleValues) {
+          if (text.includes(needle)) {
+            throw new Error(
+              `server-only marker "${needle}" leaked into local ${table}: ${JSON.stringify(row)}`,
+            );
+          }
+        }
+      }
+    }
+  }
 }
 
 export function assertNoForeignTenantRows(localRows, ownTenantId, otherTenantId) {
